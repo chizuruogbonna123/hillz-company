@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f4f6fb; color: #1f2937; }
+    .dashboard-container { max-width: 720px; margin: 64px auto; padding: 24px; background: #ffffff; border-radius: 18px; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08); text-align: center; }
+    .dashboard-container h1 { margin-bottom: 18px; font-size: 2rem; }
+    .dashboard-container p { font-size: 1rem; color: #4b5563; margin-bottom: 32px; }
+    .dashboard-container button { font-size: 1rem; padding: 12px 24px; border: none; border-radius: 10px; background: #2563eb; color: #fff; cursor: pointer; }
+    .dashboard-container button:hover { background: #1d4ed8; }
+  </style>
+</head>
+<body>
+  <div class="dashboard-container">
+    <h1 id="welcome-message">Welcome back!</h1>
+    <p>You are now on a protected dashboard page.</p>
+    <button id="logout-btn">Logout</button>
+  </div>
+
+  <script>
+    const TOKEN_STORAGE_KEY = 'token';
+    const AUTH_USER_KEY = 'authUser';
+
+    function getAuthToken() {
+      return localStorage.getItem(TOKEN_STORAGE_KEY);
+    }
+    function getAuthUser() {
+      try {
+        const raw = localStorage.getItem(AUTH_USER_KEY);
+        return raw ? JSON.parse(raw) : null;
+      } catch (e) {
+        return null;
+      }
+    }
+    function clearAuthToken() {
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+      localStorage.removeItem(AUTH_USER_KEY);
+    }
+    function redirectToLogin() {
+      window.location.href = 'index.html';
+    }
+
+    if (!getAuthToken()) {
+      redirectToLogin();
+    } else {
+      const user = getAuthUser();
+      const displayName = user?.name || user?.email || 'User';
+      document.getElementById('welcome-message').textContent = `Welcome back, ${displayName}!`;
+    }
+
+    document.getElementById('logout-btn').addEventListener('click', () => {
+      clearAuthToken();
+      redirectToLogin();
+    });
+  </script>
+</body>
+</html>

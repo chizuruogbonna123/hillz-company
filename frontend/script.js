@@ -68,6 +68,39 @@ function safeStorageRemove(key) {
 }
 
 const API_BASE_URL = 'https://hillz-company.onrender.com';
+const TOKEN_STORAGE_KEY = 'token';
+const AUTH_USER_KEY = 'authUser';
+
+function saveAuthToken(token) {
+  if (token) {
+    localStorage.setItem(TOKEN_STORAGE_KEY, token);
+  }
+}
+function getAuthToken() {
+  return localStorage.getItem(TOKEN_STORAGE_KEY);
+}
+function clearAuthToken() {
+  localStorage.removeItem(TOKEN_STORAGE_KEY);
+  localStorage.removeItem(AUTH_USER_KEY);
+}
+function saveAuthUser(user) {
+  if (user) {
+    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+  }
+}
+function getAuthUser() {
+  try {
+    const raw = localStorage.getItem(AUTH_USER_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+function redirectIfAuthenticated() {
+  if (getAuthToken()) {
+    window.location.href = 'dashboard.html';
+  }
+}
 
 function getAuthUsers() {
   try {
@@ -104,14 +137,27 @@ function initAuthUsers() {
 }
 initAuthUsers();
 
+(function checkExistingToken() {
+  const url = window.location.href.toLowerCase();
+  const isLoginPage = url.includes('/index.html') || url.endsWith('/') || url.endsWith('index.html');
+  if (isLoginPage && getAuthToken()) {
+    window.location.href = 'dashboard.html';
+  }
+})();
+
 async function postJson(url, payload) {
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(payload)
-  });
+  let response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+  } catch (err) {
+    throw new Error(err.message || 'Network request failed');
+  }
 
   const text = await response.text();
   const data = text ? JSON.parse(text) : null;
@@ -128,12 +174,24 @@ function apiSession() {
 }
 async function apiLogin(username, password) {
   const data = await postJson(`${API_BASE_URL}/login`, { email: username, password });
+  if (data.token) {
+    saveAuthToken(data.token);
+  }
+  if (data.user) {
+    saveAuthUser({
+      email: data.user.email,
+      name: data.user.name,
+      role: data.user.role
+    });
+  }
   const user = data.user || {};
   const sessionUser = {
     username: user.email || username,
     name: user.name || username,
     role: user.role || 'viewer',
-    joinDate: user.createdAt ? new Date(user.createdAt).toLocaleDateString() : new Date().toLocaleDateString()
+    joinDate: user.createdAt ? new Date(user.createdAt).toLocaleDateString() : new Date().toLocaleDateString(),
+    message: data.message,
+    token: data.token
   };
   setAuthSession(sessionUser);
   return sessionUser;
@@ -284,10 +342,16 @@ async function doLogin() {
   }
   try {
     const result = await apiLogin(email, password);
+    console.log('Login response:', result);
     currentUser = { username: result.username, name: result.name, role: result.role || 'viewer' };
-    enterApp();
+    if (result.message === 'Login successful' || result.token) {
+      window.location.href = 'dashboard.html';
+      return;
+    }
+    showErr('login-err', 'Login succeeded but no redirect condition matched.');
   } catch (err) {
-    showErr('login-err', err.message);
+    console.error('Login failed:', err);
+    showErr('login-err', err.message || 'Login failed.');
     document.getElementById('l-pass').value = '';
   }
 }
@@ -340,6 +404,7 @@ async function doLogout() {
   } catch (err) {
     console.warn('Logout failed:', err.message);
   }
+  clearAuthToken();
   currentUser = null;
   toggleUserMenu(true);
   notifications = [];
@@ -349,6 +414,11 @@ async function doLogout() {
   document.getElementById('l-pass').value = '';
   clearAuthMessages();
   closeMobileSidebar();
+}
+
+function logout() {
+  clearAuthToken();
+  window.location.href = 'index.html';
 }
 
 let userMenuOpen = false;
