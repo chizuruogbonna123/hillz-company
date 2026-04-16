@@ -50,7 +50,7 @@
         <input type="password" id="l-pass" placeholder="Enter your password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
         <button class="pw-toggle" onclick="togglePw('l-pass',this)" tabindex="-1">👁</button>
       </div>
-      <button class="login-btn" id="login-btn" onclick="doLogin()">Sign In →</button>
+      <button type="button" class="login-btn" id="login-btn" onclick="doLogin()">Sign In →</button>
     </div>
     <!-- REGISTER FORM -->
     <div id="form-register" style="display:none;">
@@ -86,7 +86,7 @@
         <input type="password" id="r-pass2" placeholder="Repeat your password" autocomplete="new-password" onkeydown="if(event.key==='Enter')doRegister()">
         <button class="pw-toggle" onclick="togglePw('r-pass2',this)" tabindex="-1">👁</button>
       </div>
-      <button class="login-btn" id="register-btn" onclick="doRegister()">Create Account →</button>
+      <button type="button" class="login-btn" id="register-btn" onclick="doRegister()">Create Account →</button>
     </div>
   </div>
 </div>

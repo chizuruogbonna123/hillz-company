@@ -340,15 +340,34 @@ async function doLogin() {
     showErr('login-err', 'Please enter a valid email address.');
     return;
   }
+
   try {
-    const result = await apiLogin(email, password);
-    console.log('Login response:', result);
-    currentUser = { username: result.username, name: result.name, role: result.role || 'viewer' };
-    if (result.message === 'Login successful' || result.token) {
-      window.location.href = 'dashboard.html';
+    const response = await fetch(`${API_BASE_URL}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+
+    const result = await response.json();
+    console.log('Login HTTP status:', response.status, 'response:', result);
+
+    if (!response.ok) {
+      const message = result?.message || result?.error || response.statusText || 'Login failed';
+      throw new Error(message);
+    }
+
+    if (result?.success) {
+      if (result.token) {
+        localStorage.setItem('token', result.token);
+      }
+      if (result.user) {
+        localStorage.setItem('authUser', JSON.stringify(result.user));
+      }
+      window.location.assign('dashboard.html');
       return;
     }
-    showErr('login-err', 'Login succeeded but no redirect condition matched.');
+
+    throw new Error(result?.message || 'Login failed.');
   } catch (err) {
     console.error('Login failed:', err);
     showErr('login-err', err.message || 'Login failed.');
