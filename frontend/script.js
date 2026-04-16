@@ -140,7 +140,7 @@ async function apiLogin(username, password) {
 }
 async function apiRegister(payload) {
   const data = await postJson(`${API_BASE_URL}/register`, {
-    email: payload.username,
+    email: payload.email,
     password: payload.password,
     name: payload.name,
     role: payload.role
@@ -308,7 +308,7 @@ async function doRegister() {
   if (pass.length < 6)  { showErr('reg-err','Password must be at least 6 characters.'); return; }
   if (pass !== pass2)   { showErr('reg-err','Passwords do not match.'); return; }
   try {
-    await apiRegister({ username: email, name, password: pass, role: selectedRegRole });
+    await apiRegister({ email, name, password: pass, role: selectedRegRole });
     showOk('reg-ok', `✓ Account created as ${selectedRegRole}! Sign in with ${email}.`);
     ['r-name','r-user','r-pass','r-pass2'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('pw-strength-wrap').style.display = 'none';

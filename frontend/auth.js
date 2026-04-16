@@ -18,7 +18,7 @@ async function postJson(url, payload) {
   const data = text ? JSON.parse(text) : null;
 
   if (!response.ok) {
-    const errorMessage = data?.error || data?.message || response.statusText || 'Request failed';
+    const errorMessage = data?.message || data?.error || response.statusText || 'Request failed';
     throw new Error(errorMessage);
   }
 
@@ -27,22 +27,25 @@ async function postJson(url, payload) {
 
 async function doRegister() {
   const name = getInputValue('r-name');
-  const username = getInputValue('r-user');
+  const email = getInputValue('r-user').toLowerCase();
   const password = getInputValue('r-pass');
   const password2 = getInputValue('r-pass2');
 
-  if (!name || !username || !password || !password2) {
+  if (!name || !email || !password || !password2) {
     alert('Please fill in all register fields.');
     return;
   }
-
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    alert('Please enter a valid email address.');
+    return;
+  }
   if (password !== password2) {
     alert('Passwords do not match.');
     return;
   }
 
   try {
-    const result = await postJson(`${API_BASE_URL}/register`, { username, password });
+    const result = await postJson(`${API_BASE_URL}/register`, { email, password, name });
     alert(`Register success: ${result.success ? 'Account created' : 'Unexpected response'}`);
     document.getElementById('r-name').value = '';
     document.getElementById('r-user').value = '';
@@ -54,16 +57,20 @@ async function doRegister() {
 }
 
 async function doLogin() {
-  const username = getInputValue('l-user');
+  const email = getInputValue('l-user').toLowerCase();
   const password = getInputValue('l-pass');
 
-  if (!username || !password) {
-    alert('Please enter username and password.');
+  if (!email || !password) {
+    alert('Please enter email and password.');
+    return;
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    alert('Please enter a valid email address.');
     return;
   }
 
   try {
-    const result = await postJson(`${API_BASE_URL}/login`, { username, password });
+    const result = await postJson(`${API_BASE_URL}/login`, { email, password });
     alert(`Login success: ${result.message || 'Logged in'}`);
     document.getElementById('l-pass').value = '';
   } catch (error) {
