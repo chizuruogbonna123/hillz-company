@@ -67,6 +67,8 @@ function safeStorageRemove(key) {
   }
 }
 
+const API_BASE_URL = 'https://hillz-company.onrender.com';
+
 function getAuthUsers() {
   try {
     const raw = safeStorageGet(AUTH_USERS_KEY);
@@ -82,14 +84,14 @@ function getAuthSession() {
   try {
     const raw = safeStorageGet(AUTH_SESSION_KEY);
     if (!raw) return null;
-    const { username } = JSON.parse(raw);
-    return getAuthUsers().find(u => u.username === username) || null;
+    const session = JSON.parse(raw);
+    return session?.user || null;
   } catch (e) {
     return null;
   }
 }
-function setAuthSession(username) {
-  safeStorageSet(AUTH_SESSION_KEY, JSON.stringify({ username, created: Date.now() }));
+function setAuthSession(user) {
+  safeStorageSet(AUTH_SESSION_KEY, JSON.stringify({ user, created: Date.now() }));
 }
 function clearAuthSession() {
   safeStorageRemove(AUTH_SESSION_KEY);
@@ -102,34 +104,53 @@ function initAuthUsers() {
 }
 initAuthUsers();
 
+async function postJson(url, payload) {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!response.ok) {
+    const errorMessage = data?.message || data?.error || response.statusText || 'Request failed';
+    throw new Error(errorMessage);
+  }
+  return data;
+}
+
 function apiSession() {
   const user = getAuthSession();
   return Promise.resolve({ user: user ? { username: user.username, name: user.name, role: user.role, joinDate: user.joinDate } : null });
 }
-function apiLogin(username, password) {
-  const users = getAuthUsers();
-  const user = users.find(u => u.username === username);
-  if (!user || user.password !== password) {
-    return Promise.reject(new Error('Invalid username or password.'));
-  }
-  setAuthSession(username);
-  return Promise.resolve({ username: user.username, name: user.name, role: user.role, joinDate: user.joinDate });
-}
-function apiRegister(payload) {
-  const users = getAuthUsers();
-  if (users.some(u => u.username === payload.username)) {
-    return Promise.reject(new Error('Username is already taken.'));
-  }
-  const newUser = {
-    username: payload.username,
-    name: payload.name,
-    password: payload.password,
-    role: payload.role || 'viewer',
-    joinDate: new Date().toLocaleDateString(),
+async function apiLogin(username, password) {
+  const data = await postJson(`${API_BASE_URL}/login`, { email: username, password });
+  const user = data.user || {};
+  const sessionUser = {
+    username: user.email || username,
+    name: user.name || username,
+    role: user.role || 'viewer',
+    joinDate: user.createdAt ? new Date(user.createdAt).toLocaleDateString() : new Date().toLocaleDateString()
   };
-  users.push(newUser);
-  saveAuthUsers(users);
-  return Promise.resolve({ username: newUser.username, name: newUser.name, role: newUser.role, joinDate: newUser.joinDate });
+  setAuthSession(sessionUser);
+  return sessionUser;
+}
+async function apiRegister(payload) {
+  const data = await postJson(`${API_BASE_URL}/register`, {
+    email: payload.username,
+    password: payload.password,
+    name: payload.name,
+    role: payload.role
+  });
+  return {
+    username: data.user.email,
+    name: data.user.name || payload.name,
+    role: data.user.role || payload.role || 'viewer',
+    joinDate: data.user.createdAt ? new Date(data.user.createdAt).toLocaleDateString() : new Date().toLocaleDateString()
+  };
 }
 function apiLogout() {
   clearAuthSession();
@@ -251,11 +272,18 @@ function getPwScore(pw) {
 
 async function doLogin() {
   document.getElementById('login-err').classList.remove('show');
-  const username = document.getElementById('l-user').value.trim();
+  const email = document.getElementById('l-user').value.trim().toLowerCase();
   const password = document.getElementById('l-pass').value;
-  if (!username || !password) { showErr('login-err', 'Please enter username and password.'); return; }
+  if (!email || !password) {
+    showErr('login-err', 'Please enter your email and password.');
+    return;
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    showErr('login-err', 'Please enter a valid email address.');
+    return;
+  }
   try {
-    const result = await apiLogin(username, password);
+    const result = await apiLogin(email, password);
     currentUser = { username: result.username, name: result.name, role: result.role || 'viewer' };
     enterApp();
   } catch (err) {
@@ -268,18 +296,20 @@ async function doRegister() {
   document.getElementById('reg-err').classList.remove('show');
   document.getElementById('reg-ok').classList.remove('show');
   const name  = document.getElementById('r-name').value.trim();
-  const uname = document.getElementById('r-user').value.trim();
+  const email = document.getElementById('r-user').value.trim().toLowerCase();
   const pass  = document.getElementById('r-pass').value;
   const pass2 = document.getElementById('r-pass2').value;
   if (!name)  { showErr('reg-err','Please enter your full name.'); return; }
-  if (!uname) { showErr('reg-err','Please choose a username.'); return; }
-  if (uname.length < 3) { showErr('reg-err','Username must be at least 3 characters.'); return; }
-  if (!/^[a-zA-Z0-9_]+$/.test(uname)) { showErr('reg-err','Username: letters, numbers and underscores only.'); return; }
+  if (!email) { showErr('reg-err','Please enter your email address.'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    showErr('reg-err','Please enter a valid email address.');
+    return;
+  }
   if (pass.length < 6)  { showErr('reg-err','Password must be at least 6 characters.'); return; }
   if (pass !== pass2)   { showErr('reg-err','Passwords do not match.'); return; }
   try {
-    await apiRegister({ username: uname, name, password: pass, role: selectedRegRole });
-    showOk('reg-ok', `✓ Account created as ${selectedRegRole}! Sign in as "${uname}".`);
+    await apiRegister({ username: email, name, password: pass, role: selectedRegRole });
+    showOk('reg-ok', `✓ Account created as ${selectedRegRole}! Sign in with ${email}.`);
     ['r-name','r-user','r-pass','r-pass2'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('pw-strength-wrap').style.display = 'none';
     setTimeout(() => switchTab('login'), 1600);
@@ -372,8 +402,9 @@ async function doChangePassword() {
   try {
     const session = await apiSession();
     if (session?.user) {
+      // Keep session available, but do not auto-enter the app on page load.
+      // This ensures the login screen appears first when opening the site.
       currentUser = session.user;
-      enterApp();
     }
   } catch (err) {
     console.warn('No active session:', err.message);
@@ -829,21 +860,95 @@ function renderShifts(){
 
 /* ══ CALCULATOR ══ */
 let cs={d:'0',expr:'',operand:null,op:null,wait:false},calcMem=0,calcMemSet=false,calcHistory=[];
-function calcUpdate(){ document.getElementById('cnum').textContent=cs.d;document.getElementById('cexpr').textContent=cs.expr;document.getElementById('cmem-ind').textContent=calcMemSet?`M = ${calcMem}`:'';document.querySelectorAll('.mb').forEach(b=>b.classList.remove('mem-active'));if(calcMemSet)document.getElementById('mr-btn').classList.add('mem-active'); }
-function cN(n){ if(cs.wait){cs.d=n;cs.wait=false;}else{cs.d=(cs.d==='0'&&n!=='.')?n:(cs.d.length<16?cs.d+n:cs.d);}calcUpdate(); }
-function cDot(){ if(cs.wait){cs.d='0.';cs.wait=false;calcUpdate();return;}if(!cs.d.includes('.')){cs.d+='.';calcUpdate();} }
-function cBack(){ cs.d=cs.d.length>1?cs.d.slice(0,-1):'0';calcUpdate(); }
-function cOp(o){ const v=parseFloat(cs.d);if(cs.operand!==null&&!cs.wait){const r=calcDo(cs.operand,cs.op,v);cs.d=String(r);cs.operand=r;}else{cs.operand=v;}cs.op=o;const sym={'+':'+','-':'−','*':'×','/':'÷'}[o];cs.expr=`${cs.operand} ${sym}`;cs.wait=true;calcUpdate(); }
-function calcDo(a,o,b){ let r;if(o==='+')r=a+b;else if(o==='-')r=a-b;else if(o==='*')r=a*b;else if(o==='/')r=b!==0?a/b:NaN;else r=b;if(isNaN(r))return'Error';return Math.round(r*1e10)/1e10; }
-function cEq(){ if(cs.op===null)return;const v=parseFloat(cs.d),sym={'+':'+','-':'−','*':'×','/':'÷'}[cs.op];const r=calcDo(cs.operand,cs.op,v);const exprStr=`${cs.operand} ${sym} ${v}`;pushHistory(exprStr,String(r));cs.expr=exprStr+' =';cs.d=String(r);cs.operand=null;cs.op=null;cs.wait=true;calcUpdate(); }
-function cAC(){ cs={d:'0',expr:'',operand:null,op:null,wait:false};calcUpdate(); }
-function cSign(){ if(cs.d!=='0'&&cs.d!=='Error'){cs.d=cs.d.startsWith('-')?cs.d.slice(1):'-'+cs.d;calcUpdate();} }
-function cPct(){ cs.d=String(Math.round(parseFloat(cs.d)/100*1e10)/1e10);calcUpdate(); }
-function mAdd(){ calcMem=Math.round((calcMem+parseFloat(cs.d))*1e10)/1e10;calcMemSet=true;calcUpdate();toast(`M+ → ${calcMem}`); }
-function mSub(){ calcMem=Math.round((calcMem-parseFloat(cs.d))*1e10)/1e10;calcMemSet=true;calcUpdate();toast(`M− → ${calcMem}`); }
-function mStore(){ calcMem=parseFloat(cs.d);calcMemSet=true;calcUpdate();toast(`MS → ${calcMem}`); }
-function mRecall(){ if(!calcMemSet){toast('Memory empty');return;}cs.d=String(calcMem);cs.wait=false;calcUpdate();toast(`MR → ${calcMem}`); }
-function mClear(){ calcMem=0;calcMemSet=false;calcUpdate();toast('Memory cleared'); }
+function calcUpdate(){
+  document.getElementById('cnum').textContent = cs.d;
+  document.getElementById('cexpr').textContent = cs.expr;
+  document.getElementById('cmem-ind').textContent = calcMemSet ? `M = ${calcMem}` : '';
+  document.querySelectorAll('.mb').forEach(b => b.classList.remove('mem-active'));
+  const mrBtn = document.getElementById('mr-btn');
+  if (calcMemSet && mrBtn) mrBtn.classList.add('mem-active');
+}
+function isCalcError(){ return cs.d === 'Error'; }
+function cN(n){
+  if (cs.wait || isCalcError()) {
+    cs.d = n;
+    cs.wait = false;
+  } else {
+    cs.d = (cs.d === '0' && n !== '.') ? n : (cs.d.length < 16 ? cs.d + n : cs.d);
+  }
+  calcUpdate();
+}
+function cDot(){
+  if (cs.wait || isCalcError()) {
+    cs.d = '0.';
+    cs.wait = false;
+    calcUpdate();
+    return;
+  }
+  if (!cs.d.includes('.')) {
+    cs.d += '.';
+    calcUpdate();
+  }
+}
+function cBack(){
+  if (isCalcError()) {
+    cs.d = '0';
+  } else {
+    cs.d = cs.d.length > 1 ? cs.d.slice(0, -1) : '0';
+  }
+  calcUpdate();
+}
+function cOp(o){
+  if (isCalcError()) {
+    cs.d = '0';
+  }
+  const v = parseFloat(cs.d);
+  if (cs.operand !== null && !cs.wait) {
+    const r = calcDo(cs.operand, cs.op, v);
+    cs.d = String(r);
+    cs.operand = r;
+  } else {
+    cs.operand = v;
+  }
+  cs.op = o;
+  const sym = {'+':'+','-':'−','*':'×','/':'÷'}[o];
+  cs.expr = `${cs.operand} ${sym}`;
+  cs.wait = true;
+  calcUpdate();
+}
+function calcDo(a,o,b){
+  let r;
+  if (o === '+') r = a + b;
+  else if (o === '-') r = a - b;
+  else if (o === '*') r = a * b;
+  else if (o === '/') r = b !== 0 ? a / b : NaN;
+  else r = b;
+  if (isNaN(r)) return 'Error';
+  return Math.round(r * 1e10) / 1e10;
+}
+function cEq(){
+  if (cs.op === null || isCalcError()) return;
+  const v = parseFloat(cs.d);
+  if (isNaN(v)) return;
+  const sym = {'+':'+','-':'−','*':'×','/':'÷'}[cs.op];
+  const r = calcDo(cs.operand, cs.op, v);
+  const exprStr = `${cs.operand} ${sym} ${v}`;
+  pushHistory(exprStr, String(r));
+  cs.expr = exprStr + ' =';
+  cs.d = String(r);
+  cs.operand = null;
+  cs.op = null;
+  cs.wait = true;
+  calcUpdate();
+}
+function cAC(){ cs = {d:'0', expr:'', operand:null, op:null, wait:false}; calcUpdate(); }
+function cSign(){ if (cs.d !== '0' && cs.d !== 'Error') { cs.d = cs.d.startsWith('-') ? cs.d.slice(1) : '-' + cs.d; calcUpdate(); } }
+function cPct(){ if (isCalcError()) return; const value = parseFloat(cs.d); if (isNaN(value)) return; cs.d = String(Math.round(value / 100 * 1e10) / 1e10); calcUpdate(); }
+function mAdd(){ if (isCalcError()) return toast('Cannot use memory after error'); const current = parseFloat(cs.d); if (isNaN(current)) return toast('Invalid value'); calcMem = Math.round((calcMem + current) * 1e10) / 1e10; calcMemSet = true; calcUpdate(); toast(`M+ → ${calcMem}`); }
+function mSub(){ if (isCalcError()) return toast('Cannot use memory after error'); const current = parseFloat(cs.d); if (isNaN(current)) return toast('Invalid value'); calcMem = Math.round((calcMem - current) * 1e10) / 1e10; calcMemSet = true; calcUpdate(); toast(`M− → ${calcMem}`); }
+function mStore(){ if (isCalcError()) return toast('Cannot store error'); const current = parseFloat(cs.d); if (isNaN(current)) return toast('Invalid value'); calcMem = current; calcMemSet = true; calcUpdate(); toast(`MS → ${calcMem}`); }
+function mRecall(){ if (!calcMemSet) { toast('Memory empty'); return; } cs.d = String(calcMem); cs.wait = false; calcUpdate(); toast(`MR → ${calcMem}`); }
+function mClear(){ calcMem = 0; calcMemSet = false; calcUpdate(); toast('Memory cleared'); }
 function pushHistory(expr,result){ calcHistory.unshift({expr,result,time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})});if(calcHistory.length>30)calcHistory.pop();renderHistory(); }
 function clearHistory(){ calcHistory=[];renderHistory(); }
 function loadHistResult(val){ cs.d=val;cs.wait=false;calcUpdate();toast(`Loaded: ${val}`); }

@@ -42,8 +42,8 @@
       <div class="login-err" id="login-err"></div>
       <div class="login-help" style="font-size:11px;color:var(--text3);margin-bottom:14px;line-height:1.4;">Default account: <strong>admin</strong> / <strong>admin</strong></div>
       <div class="login-fg">
-        <label>Username</label>
-        <input type="text" id="l-user" placeholder="Enter your username" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
+        <label>Email</label>
+        <input type="email" id="l-user" placeholder="Enter your email" autocomplete="email" onkeydown="if(event.key==='Enter')doLogin()">
       </div>
       <div class="login-fg pw-wrap">
         <label>Password</label>
@@ -61,8 +61,8 @@
         <input type="text" id="r-name" placeholder="Your full name">
       </div>
       <div class="login-fg">
-        <label>Username</label>
-        <input type="text" id="r-user" placeholder="Choose a username">
+        <label>Email</label>
+        <input type="email" id="r-user" placeholder="Enter your email" autocomplete="email">
       </div>
       <div class="login-fg">
         <label>Role</label>
@@ -483,6 +483,5 @@
 </div>
 
 <script src="script.js"></script>
-<script src="auth.js"></script>
 </body>
 </html>
